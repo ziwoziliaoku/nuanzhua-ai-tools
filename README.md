@@ -27,7 +27,9 @@
 | `06-ai-copywriter.py` | **首次调大模型** | API 调用、prompt 设计 |
 | `07-ai-copywriter-save.py` | 自动保存 | 文件写入、时间戳 |
 | `08-poster-prompt.py` / `-batch.py` | 海报提示词生成 | 多轮 API、批量处理、CSV |
-| `09-copywriter-tool.py` | **工具 v2（当前主力）** | 函数化重构、模板库、异常重试 |
+| `09-copywriter-tool.py` | 工具 v2 | 函数化重构、模板库、异常重试 |
+| `10-copywriter-history.py` | 工具 v3：加记账 | CSV 追加写入、按条件筛选；第一次由我自己填核心代码 |
+| `11-copywriter-v4.py` | **工具 v4（当前主力）** | 把批量生成与历史账本合并、菜单式入口、查询按时间倒序 |
 
 ### 09 的关键升级
 
