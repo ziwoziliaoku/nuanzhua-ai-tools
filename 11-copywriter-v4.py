@@ -179,13 +179,17 @@ def query_history(keyword: str, style_filter: str = "") -> None:
             # TODO：如果用户还指定了风格（style_filter 不为空），
             # 那么这一行的风格也要对得上，才收进 matched。
             # 提示：可以写在下面这行 if 里，形如
-            #         if style_filter and row["风格"] != style_filter:
-            #             continue
-            # 写不出来也没关系，现在这版已经能用。
+            if style_filter and row["风格"] != style_filter:
+                continue
+            
             matched.append(row)
 
+
     if not matched:
-        print(f"没找到包含「{keyword}」的记录。")
+        if keyword:
+            print(f"没找到包含「{keyword}」的记录。")
+        else:
+            print("没有符合筛选条件的记录。")
         return
 
     # 按时间倒序：最新的排最前面
