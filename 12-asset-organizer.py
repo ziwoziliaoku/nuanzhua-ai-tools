@@ -83,8 +83,20 @@ CATEGORY_FOLDERS = {
     "其他": "99-其他",
 }
 
+# 系统文件，不参与整理（动了会影响文件夹本身的显示设置）
+SKIP_NAMES = {"desktop.ini", "thumbs.db", ".ds_store"}
+
 # 疑似重复的文件，先单独放一边，等你自己决定删哪些
 DUPLICATE_FOLDER = "00-待清理-重复"
+
+
+def list_files(folder: Path) -> list:
+    """列出文件夹里的普通文件，跳过系统文件。"""
+    return [
+        p
+        for p in folder.iterdir()
+        if p.is_file() and p.name.lower() not in SKIP_NAMES
+    ]
 
 
 # ========== 基础函数 ==========
@@ -147,7 +159,7 @@ def run_scan(folder: Path, output: str) -> None:
     print()
 
     try:
-        files = [p for p in folder.iterdir() if p.is_file()]
+        files = list_files(folder)
     except PermissionError:
         print(f"没有权限读取这个文件夹：{folder}")
         return
@@ -212,7 +224,7 @@ def run_scan(folder: Path, output: str) -> None:
 
 def build_plan(folder: Path) -> list:
     """算出每个文件该搬去哪，返回计划列表。"""
-    files = [p for p in folder.iterdir() if p.is_file()]
+    files = list_files(folder)
     dup_groups = find_duplicate_groups(files)
 
     # 先把"属于重复组"的文件名挑出来
