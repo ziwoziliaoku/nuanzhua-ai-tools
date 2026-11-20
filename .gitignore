@@ -2,6 +2,8 @@
 批量生成结果/
 历史记录.csv
 素材扫描报告.csv
+搬迁计划.csv
+搬迁日志.csv
 
 # Python 缓存
 __pycache__/
