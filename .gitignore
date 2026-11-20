@@ -1,6 +1,7 @@
 # 运行产物（生成的 txt/csv，不是代码）
 批量生成结果/
 历史记录.csv
+素材扫描报告.csv
 
 # Python 缓存
 __pycache__/
