@@ -4,6 +4,8 @@
 素材扫描报告.csv
 搬迁计划.csv
 搬迁日志.csv
+重复清单.csv
+重复清理日志.csv
 
 # Python 缓存
 __pycache__/
