@@ -76,8 +76,8 @@ def human_size(num_bytes):
 
 
 def collect_files(folder):
-    """拿到文件夹里的所有普通文件。"""
-    return [p for p in folder.iterdir() if p.is_file()]
+    """拿到文件夹里的所有普通文件（递归，子目录里的一起算）。"""
+    return [p for p in folder.rglob("*") if p.is_file()]
 
 
 def find_true_duplicates(files):
@@ -129,37 +129,43 @@ def find_true_duplicates(files):
 def choose_keeper(files):
     """同一组里，留下哪一份？
 
-    默认的规则：留名字最短的那份。因为下载重复时，系统会给后来的
-    加「 (1)」「 (2)」，所以名字越短，越像最早下载的那一份原件。
+    规则：留修改时间最早的那份。
 
-    TODO 1（你来填）：
-        下面这个循环本该找出「名字最短的那份」，但判断那一步还空着。
-        请补上两句：如果 p 的名字比 best 短，就把 best 换成 p。
-
-        写完之后应该是这样（缩进要注意，if 里面要再缩一层）：
-            for p in files:
-                if len(p.name) < len(best.name):
-                    best = p
-
-        可以先只想一行：条件是什么？
-            答案是：len(p.name) < len(best.name)
+    为什么是这个规则：
+        早的那份就是最初存下来的原件，晚的那份是后来重复存的。
+        这条规则比「名字最短」更通用，原因是名字长度靠不住：
+         - 下载副本：系统会加「 (1)」，名字变长，靠长度能判断
+         - AI 生成重复品：两次导出的名字一样长（只差一个时间戳），
+           长度相同就判不出来，「比谁短」这个条件一次都不成立，
+           结果变成「谁先扫到留谁」，纯随机
+        时间不一样，两种情况都能分，所以用它。
     """
     best = files[0]
     for p in files:
-        # TODO 1：在这里补 if 判断 + 赋值
-        if len(p.name)<len(best.name):
-            best=p
-        pass
+        # 谁的时间更早，谁就是 best
+        if p.stat().st_mtime < best.stat().st_mtime:
+            best = p
     return best
+
+
+def where_is(p, root):
+    """这个文件在哪一层？只显示名字会分不清，递归之后必须带上位置。"""
+    try:
+        rel = p.parent.relative_to(root)
+    except ValueError:
+        return str(p.parent)          # 不在扫描范围内，直接给完整路径
+    text = str(rel)
+    return "根目录" if text in (".", "") else text
 
 
 def print_report(folder, total, true_groups, false_groups, named_groups):
     """把结果打在屏幕上，人看得懂的那种。"""
+    root = Path(folder)
     print("=" * 60)
     print("  真重复检查报告")
     print("=" * 60)
     print(f"扫描位置：{folder}")
-    print(f"一共 {total} 个文件")
+    print(f"一共 {total} 个文件（含所有子目录）")
     print()
 
     if not true_groups:
@@ -182,6 +188,7 @@ def print_report(folder, total, true_groups, false_groups, named_groups):
         for p in item["files"]:
             mark = "保留 " if p == keeper else "待清理"
             print(f"    {mark}  {p.name}")
+            print(f"           位置：{where_is(p, root)}")
         print()
 
     print("-" * 60)
@@ -199,28 +206,45 @@ def print_report(folder, total, true_groups, false_groups, named_groups):
         for group in named_groups:
             print(f"    {base_name(group[0])}")
             for p in group:
-                print(f"        {p.name}  {human_size(p.stat().st_size)}")
+                print(f"        {p.name}  {human_size(p.stat().st_size)}  （{where_is(p, root)}）")
             print()
 
 
-def write_csv(path, true_groups, named_groups):
+def write_csv(path, true_groups, named_groups, root):
     """把结果写成表，Excel 能直接打开。"""
+    root = Path(root)
     with Path(path).open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["组号", "判定", "文件名", "大小(KB)", "MD5指纹", "建议"])
+        writer.writerow(["组号", "判定", "文件名", "所在目录", "大小(KB)", "MD5指纹", "建议"])
 
         for index, item in enumerate(true_groups, start=1):
             keeper = choose_keeper(item["files"])
             for p in item["files"]:
                 advice = "保留" if p == keeper else "可清理"
                 writer.writerow(
-                    [index, "真重复", p.name, round(item["size"] / 1024, 1), item["hash"], advice]
+                    [
+                        index,
+                        "真重复",
+                        p.name,
+                        where_is(p, root),
+                        round(item["size"] / 1024, 1),
+                        item["hash"],
+                        advice,
+                    ]
                 )
 
         for p_group in named_groups:
             for p in p_group:
                 writer.writerow(
-                    ["-", "名字像但不同", p.name, round(p.stat().st_size / 1024, 1), "", "保留"]
+                    [
+                        "-",
+                        "名字像但不同",
+                        p.name,
+                        where_is(p, root),
+                        round(p.stat().st_size / 1024, 1),
+                        "",
+                        "保留",
+                    ]
                 )
 
 
@@ -288,6 +312,23 @@ def main():
         print(f"找不到这个文件夹：{folder}")
         return
 
+    # 防一个真会出问题的坑：递归扫描之后，如果「搬去哪」这个目录本身
+    # 就在扫描范围里，下一轮再扫会把刚搬进去的又扫出来，永远清不干净。
+    if args.move_to:
+        move_path = Path(args.move_to).resolve()
+        try:
+            move_path.relative_to(folder.resolve())
+            print("=" * 60)
+            print("参数有问题：搬走的目标目录在扫描范围里面。")
+            print(f"  扫描：{folder.resolve()}")
+            print(f"  搬到：{move_path}")
+            print("这样递归扫会把搬走的再扫一遍，越搬越多。")
+            print("请把 --move-to 指到扫描目录外面，或者用 --folder 缩小范围。")
+            print("=" * 60)
+            return
+        except ValueError:
+            pass                      # 不在里面，正常
+
     files = collect_files(folder)
     true_groups, false_groups = find_true_duplicates(files)
 
@@ -302,7 +343,7 @@ def main():
     ]
 
     print_report(folder, len(files), true_groups, false_groups, named_groups)
-    write_csv(args.output, true_groups, named_groups)
+    write_csv(args.output, true_groups, named_groups, folder)
     print()
     print(f"清单已写入：{Path(args.output).resolve()}")
 
